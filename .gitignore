@@ -60,6 +60,9 @@ cover/
 local_settings.py
 db.sqlite3
 db.sqlite3-journal
+*.db
+*.db-shm
+*.db-wal
 
 # Flask stuff:
 instance/
@@ -205,6 +208,10 @@ tempCodeRunnerFile.py
 
 # Ruff stuff:
 .ruff_cache/
+
+# ArcVault runtime output (the verified assessment fixtures are force-added intentionally)
+outputs/*.db
+outputs/*.tmp
 
 # PyPI configuration file
 .pypirc
