@@ -5,6 +5,7 @@
 - `app/`: FastAPI transport, LangGraph workflow, policies, providers, persistence, integrations.
 - `data/`: assessment inputs.
 - `scripts/`: runnable webhook and batch demonstrations.
+- `scripts/watch_mailhog.py`: separate MailHog-to-FastAPI email transport adapter.
 - `tests/`: offline unit and integration tests.
 - `docs/`: architecture and prompt rationale.
 - `outputs/`: intentionally generated assessment results and queue projections.

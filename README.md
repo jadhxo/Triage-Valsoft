@@ -45,6 +45,10 @@ Copy `.env.example` to `.env`; real `.env` files are ignored. Important settings
 | `DATABASE_URL` | Local `sqlite:///...` URL |
 | `OUTPUT_DIR` | Queue/result output root |
 | `OUTBOUND_WEBHOOK_URL` | Optional completed-record receiver |
+| `MAIL_TRIGGER` | `disabled` or `mailhog` for the separate email watcher |
+| `MAILHOG_API_URL` | MailHog HTTP API, normally `http://127.0.0.1:8025` |
+| `MAILHOG_RECIPIENT` | Address the watcher searches for and forwards |
+| `MAILHOG_INTAKE_URL` | Existing ArcVault intake webhook URL |
 
 For Groq, set `LLM_PROVIDER=groq`, a supported `LLM_MODEL`, and `GROQ_API_KEY`. For Ollama, pull a
 structured-output-capable model, set `LLM_PROVIDER=ollama`, set its model name, and ensure the local
@@ -83,6 +87,45 @@ python scripts/send_test_webhook.py --secret change-me
 ```
 
 Submitting `demo-001` again returns `200` with `duplicate: true` and does not start a second graph.
+
+## Automatic email intake with MailHog
+
+MailHog is a local SMTP test server with an HTTP API. It requires no API key. Run it with Docker:
+
+```powershell
+docker run -d --name mailhog -p 1025:1025 -p 8025:8025 mailhog/mailhog
+```
+
+Set these values in the untracked `.env` file:
+
+```env
+MAIL_TRIGGER=mailhog
+MAILHOG_API_URL=http://127.0.0.1:8025
+MAILHOG_SMTP_HOST=127.0.0.1
+MAILHOG_SMTP_PORT=1025
+MAILHOG_RECIPIENT=triage@arcvault.local
+MAILHOG_POLL_INTERVAL_SECONDS=2
+MAILHOG_REQUEST_TIMEOUT_SECONDS=5
+MAILHOG_INTAKE_URL=http://127.0.0.1:8000/webhooks/intake
+```
+
+Keep the API running, then start the separate adapter in another terminal:
+
+```powershell
+python scripts\watch_mailhog.py
+```
+
+Send a representative customer email through MailHog SMTP:
+
+```powershell
+python scripts\send_test_email.py
+```
+
+The watcher searches MailHog by recipient, parses MIME text while ignoring attachments, derives a
+stable event ID from `Message-ID`, and calls the authenticated FastAPI webhook. Repeated polls or
+watcher restarts are safe because the API's SQLite idempotency key prevents a second graph run. Use
+`python scripts\watch_mailhog.py --once` for a single diagnostic poll. The MailHog UI is available at
+`http://127.0.0.1:8025`.
 
 ## Run the assessment samples
 
@@ -125,6 +168,8 @@ successful delivery is recorded, and failure is bounded without losing the resul
 - `BackgroundTasks` is not durable; a process crash after acceptance can strand work.
 - The in-memory LangGraph checkpointer is inspectable but not restart-safe. SQLite business records
   remain durable.
+- The MailHog adapter polls its local API; production email intake would use a durable provider event
+  or push subscription rather than a process-local seen set.
 - SQLite and process-local file locking target a single local assessment instance.
 - Monetary and broad-impact matching is intentionally conservative and English-focused.
 - Groq and Ollama adapters follow their current structured-output APIs but were not live-tested

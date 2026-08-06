@@ -13,6 +13,12 @@ accepted event, background-task registration, and HTTP response. No graph node h
 authentication, or response construction. A new request receives `202`; a duplicate returns its
 existing status with `duplicate: true` and never registers another task.
 
+For automatic email demonstrations, MailHog receives SMTP on port 1025 and exposes messages through
+its local HTTP API. A separate watcher searches the configured recipient, parses the MIME text,
+derives a stable `event_id` from the email `Message-ID`, and invokes the same authenticated intake
+webhook. It does not call LangGraph or repositories directly, preserving FastAPI as the ingestion
+boundary. Repeated polling is safe because stable IDs reuse the API's durable idempotency check.
+
 For this assessment, Starlette runs the synchronous processor in its background-task thread pool.
 Production would place the accepted event on a durable broker such as Redis/Celery, RabbitMQ, Kafka,
 or a managed queue and acknowledge only after the enqueue transaction is safe.
@@ -87,6 +93,11 @@ enqueueing, queue publication, and delivery. Add a dead-letter queue, lease/reco
 processing events, replica-safe idempotency, signed webhooks, rate limiting, PII minimization and
 encryption, structured event-ID logs and traces, prompt/model versioning, cost/latency dashboards,
 evaluation datasets, configurable versioned policies, and a Human Review interface.
+
+The assessment MailHog watcher uses bounded HTTP timeouts, per-process de-duplication, and retries
+failed forwarding on later polls. A production mailbox adapter would use a provider push event or
+durable cursor/checkpoint, authenticate the provider callback, quarantine malformed MIME, and put the
+normalized event onto the durable ingestion queue.
 
 Phase 2 can add customer-history retrieval, duplicate-ticket detection, SLA calculation, multilingual
 input, feedback-driven evaluation, ticketing integrations, and customer-specific routing without
