@@ -11,24 +11,37 @@ delivery, and automatic local email intake through MailHog.
 
 ## Architecture
 
-```text
-Email -> MailHog SMTP -> MailHog watcher ----+
-                                             |
-Web Form / Support Portal -------------------+-> POST /webhooks/intake
-                                                  -> authenticate and validate
-                                                  -> atomically accept in SQLite
-                                                  -> HTTP 202 + background processing
-                                                  -> LangGraph normalize
-                                                     -> analyze
-                                                     -> validate
-                                                     -> repair once if invalid
-                                                     -> deterministic escalation policy
-                                                     -> summarize
-                                                     -> select destination
-                                                  -> persist final record in SQLite
-                                                  -> rewrite JSONL queue projections
-                                                  -> optional outbound webhook
-                                                  -> completed status
+### AI Triage LangGraph Agent
+```mermaid
+flowchart TD
+    A["Email"] --> MH["MailHog SMTP"]
+    MH --> MW["MailHog watcher"]
+    MW -->|Authenticated intake webhook| B["FastAPI ingestion layer"]
+    WF["Web Form"] -->|Authenticated intake webhook| B
+    SP["Support Portal"] -->|Authenticated intake webhook| B
+    B --> C["Authenticate + validate payload"]
+    C --> D{"Duplicate event?"}
+    D -->|Yes| E["Return 200 with existing status"]
+    D -->|No| F["Persist accepted event + return 202"]
+    F --> G["Background task"]
+    G --> H["LangGraph workflow"]
+    H --> I["Normalize request"]
+    I --> J["LLM: classify + enrich"]
+    J --> K{"Structured output valid?"}
+    K -->|No, first failure| L["Repair once"]
+    L --> K
+    K -->|No, repair exhausted| X["Force Human Review"]
+    K -->|Yes| M["Deterministic routing + escalation"]
+    X --> N["Generate team summary"]
+    M --> N
+    N --> O{"Human Review?"}
+    O -->|Yes| P["Human Review branch"]
+    O -->|No| Q["Standard destination branch"]
+    P --> R["Persist final record in SQLite"]
+    Q --> R
+    R --> T["Atomically rewrite JSONL queues"]
+    T --> S["Optional outbound webhook"]
+    S --> U["Finalize processing status"]
 ```
 
 FastAPI owns authentication, transport validation, atomic idempotency, background-task registration,
